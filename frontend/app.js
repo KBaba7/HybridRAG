@@ -220,8 +220,8 @@ function renderAssistantResponse(text, toolsUsed = []) {
 }
 
 const TOOL_META = {
-  retrieve_chunks: { icon: '🔍', label: 'retrieve_chunks' },
-  generate_chart:  { icon: '📊', label: 'generate_chart' },
+  retrieve_chunks: { label: 'retrieve_chunks' },
+  generate_chart:  { label: 'generate_chart' },
 };
 
 function renderToolTrace(toolsUsed) {
@@ -230,8 +230,8 @@ function renderToolTrace(toolsUsed) {
   const div = document.createElement('div');
   div.className = 'msg assistant tool-trace-row';
   const pills = toolsUsed.map(name => {
-    const meta = TOOL_META[name] || { icon: '🔧', label: name };
-    return `<span class="tool-pill">${meta.icon} ${meta.label}</span>`;
+    const meta = TOOL_META[name] || { label: name };
+    return `<span class="tool-pill">${meta.label}</span>`;
   }).join('');
   div.innerHTML = `<div class="msg-avatar" style="visibility:hidden">A</div><div class="tool-trace">${pills}</div>`;
   container.appendChild(div);
