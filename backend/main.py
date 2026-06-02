@@ -119,26 +119,51 @@ def make_tools(doc_ids: Optional[List[str]]):
         return "\n\n".join(chunks)
 
     @tool
-    def generate_chart(
-        chart_type: str,
-        title: str,
-        labels: List[str],
-        datasets: List[dict],
-    ) -> str:
+    def generate_chart(context: str, user_request: str) -> str:
         """
-        Generate a chart from structured financial data.
-        Call this when the user asks to plot, visualize, or chart data.
-        chart_type: one of bar, line, pie, doughnut
-        labels: x-axis labels e.g. ["2021", "2022", "2023"]
-        datasets: list of dicts with keys: label (str), data (list of numbers), color (hex string)
-        Returns a JSON string the frontend renders as a chart.
+        Given raw retrieved text context and the user's chart request, uses an LLM
+        to extract the relevant numbers and produce a chart definition.
+        Call this when the user asks to plot, visualise, or chart any data.
+        context: the text passages returned by retrieve_chunks
+        user_request: what the user wants to chart, e.g. 'revenue and net income by year'
+        Returns a ```chart JSON block the frontend renders directly.
         """
-        chart_def = {
-            "type": chart_type,
-            "title": title,
-            "labels": labels,
-            "datasets": datasets,
-        }
+        chart_llm = ChatGroq(
+            api_key=GROQ_API_KEY,
+            model=GROQ_MODEL,
+            temperature=0,
+            max_tokens=1000,
+        )
+
+        prompt = (
+            "You are a data extraction assistant. Given the financial document context below "
+            "and the user's chart request, extract the relevant numbers and output ONLY a single "
+            "JSON object — no explanation, no markdown, no extra text.\n\n"
+            "The JSON must follow this exact schema:\n"
+            "{\n"
+            '  "type": "bar" | "line" | "pie" | "doughnut",\n'
+            '  "title": "string",\n'
+            '  "labels": ["string", ...],\n'
+            '  "datasets": [\n'
+            '    { "label": "string", "data": [number, ...], "color": "#hexcolor" }\n'
+            "  ]\n"
+            "}\n\n"
+            f"User request: {user_request}\n\n"
+            f"Context:\n{context}"
+        )
+
+        response = chart_llm.invoke([HumanMessage(content=prompt)])
+        raw = response.content.strip()
+
+        # Strip accidental markdown fences if the LLM adds them
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        # Validate it's real JSON before returning
+        chart_def = json.loads(raw)
         return f"```chart\n{json.dumps(chart_def, indent=2)}\n```"
 
     return [retrieve_chunks, generate_chart]
@@ -279,8 +304,8 @@ async def chat_endpoint(request: ChatRequest):
             "You are an expert financial analyst specialising in 10-K filings.\n"
             "Always call retrieve_chunks first to get the relevant document context "
             "before answering any question.\n"
-            "When the user asks to plot, visualise, or chart data, call generate_chart "
-            "after retrieving the data — never before.\n"
+            "When the user asks to plot, visualise, or chart data, call retrieve_chunks "
+            "first, then pass the retrieved context and the user's request to generate_chart.\n"
             "For tables, output them as HTML <table class=\"msg-table\"> with <thead> "
             "and <tbody>. Use class=\"num\" for numbers, \"pos\" for positive values, "
             "\"neg\" for negative values.\n"
