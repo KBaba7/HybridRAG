@@ -238,8 +238,34 @@ function renderToolTrace(toolsUsed) {
   container.scrollTop = container.scrollHeight;
 }
 
+function parseMarkdownTable(text) {
+  // Match a markdown table block: header row | separator row | data rows
+  return text.replace(/(\|.+\|\n\|[-| :]+\|\n(?:\|.+\|\n?)+)/g, (match) => {
+    const lines = match.trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) return match;
+
+    const headers = lines[0].split('|').slice(1, -1).map(h => h.trim());
+    // skip separator line (index 1)
+    const rows = lines.slice(2).map(l => l.split('|').slice(1, -1).map(c => c.trim()));
+
+    const thead = headers.map(h => `<th>${escHtml(h)}</th>`).join('');
+    const tbody = rows.map(row =>
+      '<tr>' + row.map(cell => {
+        const isNum = /^-?[\d,.$%]+$/.test(cell.replace(/\s/g, ''));
+        const cls = isNum ? ' class="num"' : '';
+        return `<td${cls}>${escHtml(cell)}</td>`;
+      }).join('') + '</tr>'
+    ).join('');
+
+    return `<table class="msg-table"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+  });
+}
+
 function formatMsgText(text) {
-  const formatted = text
+  // Convert markdown tables before other formatting
+  let formatted = parseMarkdownTable(text);
+
+  formatted = formatted
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>');
 
