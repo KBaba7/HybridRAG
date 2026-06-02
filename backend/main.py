@@ -68,8 +68,10 @@ try:
         field_name="doc_id",
         field_schema=PayloadSchemaType.KEYWORD,
     )
-except Exception:
-    pass  # index already exists
+    logger.info("Payload index on doc_id ensured.")
+except Exception as e:
+    # Index already exists — not an error
+    logger.info("Payload index already exists or skipped: %s", e)
 
 # --- Pydantic Models ---
 
@@ -106,7 +108,7 @@ def get_doc_catalogue(allowed_ids: Optional[List[str]]) -> List[dict]:
             if allowed_ids and doc_id not in allowed_ids:
                 continue
             if doc_id not in catalogue:
-                catalogue[doc_id] = payload.get("company", "Unknown")
+                catalogue[str(doc_id)] = payload.get("company", "Unknown")
         if next_offset is None:
             break
         offset = next_offset
@@ -162,9 +164,11 @@ def make_tools(doc_ids: Optional[List[str]]):
             raw = raw.strip()
 
         selected = json.loads(raw)
-        # Fallback: if LLM returns nothing valid, use all docs
+        # Ensure strings, fallback to all if empty
         if not isinstance(selected, list) or len(selected) == 0:
             selected = [d["id"] for d in catalogue]
+        else:
+            selected = [str(i) for i in selected]
 
         logger.info("Document routing: selected %s from %s", selected, [d["id"] for d in catalogue])
         return json.dumps(selected)
@@ -180,8 +184,10 @@ def make_tools(doc_ids: Optional[List[str]]):
         """
         try:
             selected_ids = json.loads(doc_ids_json)
+            # Ensure all IDs are strings — LLM may return bare integers
+            selected_ids = [str(i) for i in selected_ids]
         except Exception:
-            selected_ids = doc_ids  # fallback to all
+            selected_ids = [str(i) for i in (doc_ids or [])]
 
         query_vector = embedder.encode(query).tolist()
 
