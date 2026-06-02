@@ -401,9 +401,10 @@ async def chat_endpoint(request: ChatRequest):
             "1. Call select_documents to identify which documents are relevant.\n"
             "2. Call retrieve_chunks with the query and the doc_ids returned by select_documents.\n"
             "3. Answer from the retrieved context. If the user asked for a chart, also call generate_chart.\n"
-            "For tables, output them as HTML <table class=\"msg-table\"> with <thead> "
-            "and <tbody>. Use class=\"num\" for numbers, \"pos\" for positive values, "
-            "\"neg\" for negative values.\n"
+            "Formatting rules — follow these strictly:\n"
+            "- For tabular data, output a Markdown table using | pipes |. Do not use HTML spans or tags inside table cells.\n"
+            "- Never output raw HTML tags like <span>, <div>, or <p> in your response. Plain text and Markdown only.\n"
+            "- For tables, use plain numeric values in cells. Do not wrap values in any HTML.\n"
             "Base all answers strictly on the retrieved context."
         )
 

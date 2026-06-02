@@ -266,6 +266,13 @@ function formatMsgText(text) {
   // Convert markdown tables before other formatting
   let formatted = parseMarkdownTable(text);
 
+  // Strip any raw HTML tags the LLM may have output as literal text
+  // (e.g. <span class="pos">…</span> appearing as plain characters)
+  // Only do this outside of actual rendered table blocks
+  if (!/<table[\s>]/i.test(formatted)) {
+    formatted = formatted.replace(/<[^>]+>/g, '');
+  }
+
   formatted = formatted
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>');
