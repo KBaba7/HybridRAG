@@ -83,23 +83,112 @@ class ChatRequest(BaseModel):
     active_doc_ids: Optional[List[str]] = None
 
 # --- LangGraph Tools ---
-# doc_ids is injected per-request via closure; tools are stateless functions.
+# doc_ids and doc_catalogue are injected per-request via closure.
+
+def get_doc_catalogue(allowed_ids: Optional[List[str]]) -> List[dict]:
+    """Build a lightweight {id, name} catalogue from Qdrant for the given doc IDs."""
+    catalogue: dict = {}
+    offset = None
+    while True:
+        records, next_offset = qdrant.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=None,
+            limit=500,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        for record in records:
+            payload = record.payload or {}
+            doc_id = payload.get("doc_id")
+            if not doc_id:
+                continue
+            if allowed_ids and doc_id not in allowed_ids:
+                continue
+            if doc_id not in catalogue:
+                catalogue[doc_id] = payload.get("company", "Unknown")
+        if next_offset is None:
+            break
+        offset = next_offset
+    return [{"id": k, "name": v} for k, v in catalogue.items()]
+
 
 def make_tools(doc_ids: Optional[List[str]]):
 
+    # Build catalogue once per request
+    catalogue = get_doc_catalogue(doc_ids)
+
     @tool
-    def retrieve_chunks(query: str) -> str:
+    def select_documents(query: str) -> str:
         """
-        Search the vector database for document chunks relevant to the query.
-        Always call this first to get context before answering any financial question.
-        Returns the retrieved text passages with their source and page number.
+        Given the user query, decide which documents are relevant to answer it.
+        Always call this FIRST before retrieve_chunks.
+        Returns a JSON list of selected doc_ids to search.
         """
+        if not catalogue:
+            return json.dumps([])
+
+        # If only one doc, skip the LLM call
+        if len(catalogue) == 1:
+            return json.dumps([catalogue[0]["id"]])
+
+        selector_llm = ChatGroq(
+            api_key=GROQ_API_KEY,
+            model=GROQ_MODEL,
+            temperature=0,
+            max_tokens=256,
+        )
+
+        doc_list = "\n".join(f'- id: {d["id"]}  name: {d["name"]}' for d in catalogue)
+        prompt = (
+            "You are a document routing assistant.\n"
+            "Given the user query and the list of available documents below, "
+            "return ONLY a JSON array of the document IDs that are relevant to answer the query.\n"
+            "If the query spans multiple documents (e.g. a comparison), include all relevant ones.\n"
+            "If unsure, include all.\n"
+            "Output ONLY the JSON array, no explanation.\n\n"
+            f"Available documents:\n{doc_list}\n\n"
+            f"User query: {query}"
+        )
+
+        response = selector_llm.invoke([HumanMessage(content=prompt)])
+        raw = response.content.strip()
+
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        selected = json.loads(raw)
+        # Fallback: if LLM returns nothing valid, use all docs
+        if not isinstance(selected, list) or len(selected) == 0:
+            selected = [d["id"] for d in catalogue]
+
+        logger.info("Document routing: selected %s from %s", selected, [d["id"] for d in catalogue])
+        return json.dumps(selected)
+
+    @tool
+    def retrieve_chunks(query: str, doc_ids_json: str) -> str:
+        """
+        Search the vector database for chunks relevant to the query,
+        scoped only to the documents selected by select_documents.
+        query: the user's question
+        doc_ids_json: JSON array of doc_ids returned by select_documents
+        Returns retrieved text passages with source and page number.
+        """
+        try:
+            selected_ids = json.loads(doc_ids_json)
+        except Exception:
+            selected_ids = doc_ids  # fallback to all
+
         query_vector = embedder.encode(query).tolist()
 
         query_filter = None
-        if doc_ids:
+        if selected_ids:
             query_filter = Filter(
-                must=[FieldCondition(key="doc_id", match=MatchAny(any=doc_ids))]
+                must=[FieldCondition(key="doc_id", match=MatchAny(any=selected_ids))]
             )
 
         response = qdrant.query_points(
@@ -110,7 +199,7 @@ def make_tools(doc_ids: Optional[List[str]]):
         )
 
         if not response.points:
-            return "No relevant chunks found in the document."
+            return "No relevant chunks found in the selected documents."
 
         chunks = [
             f"--- Source: {hit.payload['company']} (Page {hit.payload.get('page_num', 'N/A')}) ---\n{hit.payload['text']}"
@@ -166,7 +255,7 @@ def make_tools(doc_ids: Optional[List[str]]):
         chart_def = json.loads(raw)
         return f"```chart\n{json.dumps(chart_def, indent=2)}\n```"
 
-    return [retrieve_chunks, generate_chart]
+    return [select_documents, retrieve_chunks, generate_chart]
 
 
 # --- Helper ---
@@ -302,10 +391,10 @@ async def chat_endpoint(request: ChatRequest):
 
         system_prompt = (
             "You are an expert financial analyst specialising in 10-K filings.\n"
-            "Always call retrieve_chunks first to get the relevant document context "
-            "before answering any question.\n"
-            "When the user asks to plot, visualise, or chart data, call retrieve_chunks "
-            "first, then pass the retrieved context and the user's request to generate_chart.\n"
+            "For every question, follow this exact tool order:\n"
+            "1. Call select_documents to identify which documents are relevant.\n"
+            "2. Call retrieve_chunks with the query and the doc_ids returned by select_documents.\n"
+            "3. Answer from the retrieved context. If the user asked for a chart, also call generate_chart.\n"
             "For tables, output them as HTML <table class=\"msg-table\"> with <thead> "
             "and <tbody>. Use class=\"num\" for numbers, \"pos\" for positive values, "
             "\"neg\" for negative values.\n"

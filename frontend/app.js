@@ -220,8 +220,9 @@ function renderAssistantResponse(text, toolsUsed = []) {
 }
 
 const TOOL_META = {
-  retrieve_chunks: { label: 'retrieve_chunks' },
-  generate_chart:  { label: 'generate_chart' },
+  select_documents: { label: 'select_documents' },
+  retrieve_chunks:  { label: 'retrieve_chunks' },
+  generate_chart:   { label: 'generate_chart' },
 };
 
 function renderToolTrace(toolsUsed) {
