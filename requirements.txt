@@ -6,3 +6,6 @@ qdrant-client
 sentence-transformers
 liteparse
 python-multipart
+langgraph
+langchain-groq
+langchain-core
