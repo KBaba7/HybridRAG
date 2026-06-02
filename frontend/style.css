@@ -547,21 +547,21 @@ table.msg-table .neg { color: var(--accent-red); }
 .tool-trace {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 2px 0 6px;
+  gap: 4px;
+  padding: 0 0 4px;
 }
 
 .tool-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 20px;
-  padding: 3px 10px;
+  padding: 2px 8px;
 }
 
 /* --- Global Notifications Toast System --- */

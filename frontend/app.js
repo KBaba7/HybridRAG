@@ -220,8 +220,8 @@ function renderAssistantResponse(text, toolsUsed = []) {
 }
 
 const TOOL_META = {
-  retrieve_chunks: { icon: '🔍', label: 'Retrieved context from Qdrant' },
-  generate_chart:  { icon: '📊', label: 'Generated chart from data' },
+  retrieve_chunks: { icon: '🔍', label: 'retrieve_chunks' },
+  generate_chart:  { icon: '📊', label: 'generate_chart' },
 };
 
 function renderToolTrace(toolsUsed) {
