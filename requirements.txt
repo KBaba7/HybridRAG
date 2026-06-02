@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+groq
+qdrant-client
+sentence-transformers
+liteparse
+python-multipart
