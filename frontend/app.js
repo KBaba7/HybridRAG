@@ -190,7 +190,7 @@ async function sendMessage() {
     const data = await resp.json();
     
     removeThinking(thinkingId);
-    renderAssistantResponse(data.response);
+    renderAssistantResponse(data.response, data.tools_used || []);
     
     chatHistory.push({ role: 'user', content: text });
     chatHistory.push({ role: 'assistant', content: data.response });
@@ -202,7 +202,7 @@ async function sendMessage() {
   }
 }
 
-function renderAssistantResponse(text) {
+function renderAssistantResponse(text, toolsUsed = []) {
   const chartMatch = text.match(/```chart\s*([\s\S]*?)```/);
   if (chartMatch) {
     try {
@@ -211,10 +211,31 @@ function renderAssistantResponse(text) {
       const afterChart = text.slice(chartMatch.index + chartMatch[0].length);
       const msgId = addMsg('assistant', formatMsgText(beforeChart + afterChart));
       renderChart(chartDef, msgId);
+      renderToolTrace(toolsUsed);
       return;
     } catch (e) {}
   }
   addMsg('assistant', formatMsgText(text));
+  renderToolTrace(toolsUsed);
+}
+
+const TOOL_META = {
+  retrieve_chunks: { icon: '🔍', label: 'Retrieved context from Qdrant' },
+  generate_chart:  { icon: '📊', label: 'Generated chart from data' },
+};
+
+function renderToolTrace(toolsUsed) {
+  if (!toolsUsed || toolsUsed.length === 0) return;
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant tool-trace-row';
+  const pills = toolsUsed.map(name => {
+    const meta = TOOL_META[name] || { icon: '🔧', label: name };
+    return `<span class="tool-pill">${meta.icon} ${meta.label}</span>`;
+  }).join('');
+  div.innerHTML = `<div class="msg-avatar" style="visibility:hidden">A</div><div class="tool-trace">${pills}</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
 }
 
 function formatMsgText(text) {

@@ -539,6 +539,31 @@ table.msg-table .neg { color: var(--accent-red); }
   cursor: not-allowed;
 }
 
+/* --- Tool Trace Bubble --- */
+.tool-trace-row {
+  gap: 16px;
+}
+
+.tool-trace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+
+.tool-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+
 /* --- Global Notifications Toast System --- */
 .notif {
   position: fixed;

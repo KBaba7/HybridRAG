@@ -320,9 +320,17 @@ async def chat_endpoint(request: ChatRequest):
 
         result = agent.invoke({"messages": messages})
 
+        # Extract tool calls from the message trace
+        tools_used = []
+        for msg in result["messages"]:
+            # ToolMessage has a name attribute
+            if hasattr(msg, "name") and msg.name:
+                if msg.name not in tools_used:
+                    tools_used.append(msg.name)
+
         # Last message in the graph output is the final answer
         final = result["messages"][-1].content
-        return {"response": final}
+        return {"response": final, "tools_used": tools_used}
 
     except Exception as e:
         logger.error("Chat error: %s\n%s", e, traceback.format_exc())
